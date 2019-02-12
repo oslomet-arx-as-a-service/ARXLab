@@ -1,13 +1,17 @@
 package jeremiah;
 
+import org.apache.poi.ss.formula.functions.T;
 import org.deidentifier.arx.*;
 import org.deidentifier.arx.Data.DefaultData;
+import org.deidentifier.arx.aggregates.StatisticsEquivalenceClasses;
 import org.deidentifier.arx.criteria.KAnonymity;
 import org.deidentifier.arx.ARXResult;
+import org.deidentifier.arx.metric.InformationLoss;
 import org.deidentifier.arx.risk.RiskModelAttributes;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class Main {
     static DefaultData data = Data.create();
@@ -41,7 +45,7 @@ public class Main {
         //Defining attribute types(sensitive, identifying, quasi-identifying, insensitive, etc)
         data.getDefinition().setAttributeType("age", AttributeType.IDENTIFYING_ATTRIBUTE);
         data.getDefinition().setAttributeType("gender", AttributeType.QUASI_IDENTIFYING_ATTRIBUTE);
-        data.getDefinition().setAttributeType("zipcode", AttributeType.INSENSITIVE_ATTRIBUTE);
+        data.getDefinition().setAttributeType("zipcode", AttributeType.QUASI_IDENTIFYING_ATTRIBUTE);
     }
 
     public static void defineHeirarchy(){
@@ -76,6 +80,59 @@ public class Main {
         anonymizer.setHistorySize(200);
     }
 
+    public static void NodeResult(ARXResult result,Data dataAll){
+        ARXLattice.ARXNode node = result.getGlobalOptimum();
+        String test = Arrays.toString(node.getTransformation());
+        System.out.println("- Solution ");
+        System.out.println(test);
+
+        ARXPopulationModel pModel =
+                ARXPopulationModel.create(dataAll.getHandle().getNumRows(),
+                        0.01d);
+
+        double riskP = result.getOutput()
+                .getRiskEstimator(pModel)
+                .getSampleBasedReidentificationRisk()
+                .getEstimatedProsecutorRisk();
+
+        double riskJ = result.getOutput()
+                .getRiskEstimator(pModel)
+                .getSampleBasedReidentificationRisk()
+                .getEstimatedJournalistRisk();
+
+        double riskM = result.getOutput()
+                .getRiskEstimator(pModel)
+                .getSampleBasedReidentificationRisk()
+                .getEstimatedMarketerRisk();
+
+        System.out.println("  * Prosecutor re-identification risk: " + riskP);
+        System.out.println("  * Journalist re-identification risk: " + riskJ);
+        System.out.println("  * Marketer   re-identification risk: " + riskM);
+
+        InformationLoss<?> vo = result.getGlobalOptimum().getLowestScore();
+        InformationLoss<?> v1 = result.getGlobalOptimum().getHighestScore();
+        System.out.println("- Information Loss " );
+        System.out.println(vo+"/"+v1);
+
+
+        StatisticsEquivalenceClasses v2 = result.getOutput(result.getGlobalOptimum(), false).getStatistics().getEquivalenceClassStatistics();
+        System.out.println("- Statistics");
+        System.out.println(v2);
+
+        String v3 = "";
+        v3 = v3 + dataAll.getHandle().getView().getNumRows();
+        v3 = v3 + " records with ";
+        v3 = v3 + dataAll.getDefinition().getQuasiIdentifyingAttributes().size();
+        v3 = v3 + " quasi-identifiers";
+        System.out.println("- Data: ");
+        System.out.println(v3);
+
+        String v4 = String.valueOf(result.getLattice().getSize());
+        System.out.println("- Policies available ");
+        System.out.println(v4);
+
+    }
+
 
     public static void main(String[] args) throws IOException {
 
@@ -86,6 +143,8 @@ public class Main {
        setAnonymizer();
        File newfile = new File("C:/Users/jeuy/Desktop/bachelor/test.txt");
        result = anonymizer.anonymize(data,config);
+
+       NodeResult(result,data);
 
        //setter resultatet lik et datahandle objelkt for å kunne hente statisktikk bak anonymiliseringen
        handle = result.getOutput();
